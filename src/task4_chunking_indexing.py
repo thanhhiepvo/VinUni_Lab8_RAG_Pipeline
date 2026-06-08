@@ -35,17 +35,18 @@ STANDARDIZED_DIR = Path(__file__).parent.parent / "data" / "standardized"
 # CONFIGURATION — Giải thích lựa chọn của bạn trong comment
 # =============================================================================
 
-# TODO: Chọn chunking strategy và giải thích vì sao
-CHUNK_SIZE = 500        # Vì sao chọn 500? ...
-CHUNK_OVERLAP = 50      # Vì sao chọn 50? ...
+# Chọn chunking strategy và giải thích vì sao
+CHUNK_SIZE = 1000       # Size 1000 phù hợp với context length của LLM, đảm bảo đủ ý
+CHUNK_OVERLAP = 200     # Overlap 200 giúp không bị đứt đoạn ngữ nghĩa giữa các chunk liền kề
 CHUNKING_METHOD = "recursive"  # "recursive" | "markdown_header" | "semantic"
 
-# TODO: Chọn embedding model và giải thích
-EMBEDDING_MODEL = "BAAI/bge-m3"  # Vì sao? Multilingual, tốt cho tiếng Việt
-EMBEDDING_DIM = 1024
+# Chọn embedding model và giải thích
+EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"  # Nhỏ gọn, tải nhanh, phù hợp cho bài lab trên máy cá nhân
+EMBEDDING_DIM = 384
 
-# TODO: Chọn vector store
-VECTOR_STORE = "weaviate"  # "weaviate" | "chromadb" | "faiss"
+# Chọn vector store
+VECTOR_STORE = "faiss"  # "weaviate" | "chromadb" | "faiss"
+
 
 
 # =============================================================================
@@ -59,17 +60,15 @@ def load_documents() -> list[dict]:
     Returns:
         List of {'content': str, 'metadata': {'source': str, 'type': str}}
     """
-    # TODO: Iterate qua STANDARDIZED_DIR, đọc .md files
-    # documents = []
-    # for md_file in STANDARDIZED_DIR.rglob("*.md"):
-    #     content = md_file.read_text(encoding="utf-8")
-    #     doc_type = "legal" if "legal" in str(md_file) else "news"
-    #     documents.append({
-    #         "content": content,
-    #         "metadata": {"source": md_file.name, "type": doc_type}
-    #     })
-    # return documents
-    raise NotImplementedError("Implement load_documents")
+    documents = []
+    for md_file in STANDARDIZED_DIR.rglob("*.md"):
+        content = md_file.read_text(encoding="utf-8")
+        doc_type = "legal" if "legal" in str(md_file) else "news"
+        documents.append({
+            "content": content,
+            "metadata": {"source": md_file.name, "type": doc_type}
+        })
+    return documents
 
 
 def chunk_documents(documents: list[dict]) -> list[dict]:
@@ -79,26 +78,22 @@ def chunk_documents(documents: list[dict]) -> list[dict]:
     Returns:
         List of {'content': str, 'metadata': dict} — mỗi item là 1 chunk
     """
-    # TODO: Implement chunking
-    #
-    # Ví dụ với RecursiveCharacterTextSplitter:
-    # from langchain_text_splitters import RecursiveCharacterTextSplitter
-    #
-    # splitter = RecursiveCharacterTextSplitter(
-    #     chunk_size=CHUNK_SIZE,
-    #     chunk_overlap=CHUNK_OVERLAP,
-    #     separators=["\n\n", "\n", ". ", " ", ""]
-    # )
-    # chunks = []
-    # for doc in documents:
-    #     splits = splitter.split_text(doc["content"])
-    #     for i, chunk_text in enumerate(splits):
-    #         chunks.append({
-    #             "content": chunk_text,
-    #             "metadata": {**doc["metadata"], "chunk_index": i}
-    #         })
-    # return chunks
-    raise NotImplementedError("Implement chunk_documents")
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+    
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=CHUNK_SIZE,
+        chunk_overlap=CHUNK_OVERLAP,
+        separators=["\n\n", "\n", ". ", " ", ""]
+    )
+    chunks = []
+    for doc in documents:
+        splits = splitter.split_text(doc["content"])
+        for i, chunk_text in enumerate(splits):
+            chunks.append({
+                "content": chunk_text,
+                "metadata": {**doc["metadata"], "chunk_index": i}
+            })
+    return chunks
 
 
 def embed_chunks(chunks: list[dict]) -> list[dict]:
@@ -108,51 +103,50 @@ def embed_chunks(chunks: list[dict]) -> list[dict]:
     Returns:
         Mỗi chunk dict được thêm key 'embedding': list[float]
     """
-    # TODO: Implement embedding
-    #
-    # Ví dụ với sentence-transformers:
-    # from sentence_transformers import SentenceTransformer
-    #
-    # model = SentenceTransformer(EMBEDDING_MODEL)
-    # texts = [c["content"] for c in chunks]
-    # embeddings = model.encode(texts, show_progress_bar=True)
-    # for chunk, emb in zip(chunks, embeddings):
-    #     chunk["embedding"] = emb.tolist()
-    # return chunks
-    raise NotImplementedError("Implement embed_chunks")
+    from sentence_transformers import SentenceTransformer
+    
+    model = SentenceTransformer(EMBEDDING_MODEL)
+    texts = [c["content"] for c in chunks]
+    embeddings = model.encode(texts, show_progress_bar=True)
+    for chunk, emb in zip(chunks, embeddings):
+        chunk["embedding"] = emb.tolist()
+    return chunks
 
 
 def index_to_vectorstore(chunks: list[dict]):
     """
     Lưu chunks vào vector store đã chọn.
     """
-    # TODO: Implement indexing
-    #
-    # Ví dụ với Weaviate:
-    # import weaviate
-    # from weaviate.classes.config import Configure, Property, DataType
-    #
-    # client = weaviate.connect_to_local()  # hoặc connect_to_weaviate_cloud()
-    #
-    # # Tạo collection
-    # collection = client.collections.create(
-    #     name="DrugLawDocs",
-    #     vectorizer_config=Configure.Vectorizer.none(),
-    #     properties=[
-    #         Property(name="content", data_type=DataType.TEXT),
-    #         Property(name="source", data_type=DataType.TEXT),
-    #         Property(name="doc_type", data_type=DataType.TEXT),
-    #     ]
-    # )
-    #
-    # # Insert chunks
-    # with collection.batch.dynamic() as batch:
-    #     for chunk in chunks:
-    #         batch.add_object(
-    #             properties={"content": chunk["content"], ...},
-    #             vector=chunk["embedding"]
-    #         )
-    raise NotImplementedError("Implement index_to_vectorstore")
+    import faiss
+    import numpy as np
+    import json
+    
+    vector_dir = STANDARDIZED_DIR.parent / "faiss_index"
+    vector_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Chuẩn bị dữ liệu
+    embeddings = np.array([c["embedding"] for c in chunks]).astype("float32")
+    
+    # Khởi tạo FAISS index
+    index = faiss.IndexFlatL2(EMBEDDING_DIM)
+    index.add(embeddings)
+    
+    # Lưu index và metadata
+    faiss.write_index(index, str(vector_dir / "index.faiss"))
+    
+    metadata = []
+    for chunk in chunks:
+        # Không lưu embedding vào metadata.json để tiết kiệm dung lượng
+        meta = {
+            "content": chunk["content"],
+            "metadata": chunk["metadata"]
+        }
+        metadata.append(meta)
+        
+    with open(vector_dir / "metadata.json", "w", encoding="utf-8") as f:
+        json.dump(metadata, f, ensure_ascii=False, indent=2)
+        
+    print(f"  ✓ Saved FAISS index and {len(metadata)} chunks metadata to {vector_dir}")
 
 
 def run_pipeline():
